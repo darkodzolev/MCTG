@@ -39,12 +39,26 @@ public class RequestHandler implements Runnable
                 response = new Response(
                         HttpStatus.BAD_REQUEST,
                         ContentType.JSON,
-                        "[]"
+                        "Invalid Request: Pathname is null"
                 );
             }
             else
             {
-                response = this.router.resolve(request.getMethod().name(), request.getPathname()).handleRequest(request);
+                var handler = this.router.resolve(request.getMethod().name(), request.getPathname());
+                if (handler == null)
+                {
+                    // Handle null return from router.resolve() gracefully
+                    response = new Response(
+                            HttpStatus.NOT_FOUND,
+                            ContentType.JSON,
+                            "{\"error\": \"Route not found\"}"
+                    );
+                }
+                else
+                {
+                    // Invoke the handler and generate response
+                    response = handler.handleRequest(request);
+                }
             }
             printWriter.write(response.get());
         }

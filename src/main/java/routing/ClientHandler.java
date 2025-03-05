@@ -5,6 +5,7 @@ import server.Response;
 import server.Service;
 import service.UserService;
 import service.AuthService;
+import service.CardService;
 
 public class ClientHandler implements Service
 {
@@ -18,19 +19,36 @@ public class ClientHandler implements Service
 
     private void setupRoutes()
     {
+        // Existing routes
         router.addRoute("GET", "/", request -> processWelcome());
         router.addRoute("POST", "/users", request -> new UserService().registerUser(request.getBody()));
         router.addRoute("POST", "/sessions", request -> new UserService().loginUser(request.getBody()));
-        router.addRoute("GET", "/user", request -> {
-            String token = request.getHeaderMap().getHeader("Authorization");
-            return new AuthService(UserService.getUsers()).authenticateUser(token);
+        router.addRoute("POST", "/packages", request -> {
+            String token = request.getHeaderMap().getHeader("Authorization").replace("Bearer ", "");
+            return new CardService().createPackage(request.getBody(), token);
         });
+        router.addRoute("POST", "/transactions/packages", request -> {
+            String token = request.getHeaderMap().getHeader("Authorization").replace("Bearer ", "");
+            System.out.println("Token extracted in ClientHandler: " + token);
+            return new CardService().acquirePackages(token);
+        });
+        router.addRoute("GET", "/cards", request -> new CardService().getUserCards(request));
+        router.addRoute("GET", "/deck", request -> new CardService().getDeck(request));
+        router.addRoute("PUT", "/deck", request -> new CardService().configureDeck(request));
+        router.addRoute("GET", "/deck?format=plain", request -> new CardService().getDeckAsPlainText(request));
     }
 
     @Override
-    public Response handleRequest(Request request)
-    {
-        return router.route(request);
+    public Response handleRequest(Request request) {
+        System.out.println("Incoming Request:");
+        System.out.println("Method: " + request.getMethod());
+        System.out.println("Path: " + request.getPathname());
+        System.out.println("Query Params: " + request.getParams());
+        System.out.println("Headers: ");
+        request.getHeaderMap().print();
+        System.out.println("Body: " + request.getBody());
+
+        return router.route(request); // Proceed with routing
     }
 
     private Response processWelcome()

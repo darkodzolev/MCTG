@@ -118,4 +118,25 @@ public class Request
     {
         this.pathParts = pathParts;
     }
+
+    public String getQueryParam(String key)
+    {
+        if (this.params == null || this.params.isEmpty())
+        {
+            return null; // No query parameters exist
+        }
+
+        String[] keyValuePairs = this.params.split("&"); // Split on '&' for multiple parameters
+        for (String pair : keyValuePairs)
+        {
+            String[] keyValue = pair.split("=");
+
+            // Ensure the key exists and is not out of bounds
+            if (keyValue.length > 1 && keyValue[0].equalsIgnoreCase(key))
+            {
+                return keyValue[1];
+            }
+        }
+        return null; // Key not found
+    }
 }

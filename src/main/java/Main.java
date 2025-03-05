@@ -26,7 +26,13 @@ public class Main
 
         router.addService("POST /users", clientHandler);
         router.addService("POST /sessions", clientHandler);
+        router.addService("POST /packages", clientHandler);
+        router.addService("POST /transactions/packages", clientHandler);
+        router.addService("GET /cards", clientHandler);
+        router.addService("GET /deck", clientHandler);
+        router.addService("PUT /deck", clientHandler);
+        router.addService("GET /deck?format=plain", clientHandler);
 
-        return router;  // Gib den konfigurierten Router zurück
+        return router;
     }
 }
