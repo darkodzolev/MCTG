@@ -19,6 +19,7 @@ public class ClientHandler implements Service
     public ClientHandler()
     {
         this.router = new RouteHandler();
+        this.cardService = new CardService();
         setupRoutes();
     }
 
@@ -41,7 +42,11 @@ public class ClientHandler implements Service
         router.addRoute("POST", "/transactions/packages", request -> {
             String token = request.getHeaderMap().getHeader("Authorization").replace("Bearer ", "");
             System.out.println("Token extracted in ClientHandler: " + token);
-            return new CardService().acquirePackages(token);
+            try {
+                return new CardService().acquirePackages(token);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
         });
         router.addRoute("GET", "/cards", request -> new CardService().getUserCards(request));
         router.addRoute("GET", "/deck", request -> new CardService().getDeck(request));

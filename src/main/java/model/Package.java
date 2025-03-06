@@ -6,9 +6,9 @@ import java.util.UUID;
 public class Package
 {
     private List<Card> cards;
-    private String id;
+    private UUID id;
 
-    public Package(List<Card> cards, String id)
+    public Package(List<Card> cards, UUID id)
     {
         this.cards = cards;
         this.id = id;
@@ -22,11 +22,11 @@ public class Package
         this.cards = cards;
     }
 
-    public String getId() {
+    public UUID getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(UUID id) {
         this.id = id;
     }
 

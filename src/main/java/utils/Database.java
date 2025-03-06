@@ -54,26 +54,18 @@ public class Database
 
             String createPackagesTableSQL = "CREATE TABLE packages (" +
                     "id UUID PRIMARY KEY, " +
-                    "name VARCHAR(255) NOT NULL, " +
-                    "damage DOUBLE PRECISION NOT NULL)";
+                    "user_id INT REFERENCES users(id)" +
+                    ");";
             stmt.executeUpdate(createPackagesTableSQL);
             System.out.println("Created packages table.");
 
             String createCardsTableSQL = "CREATE TABLE cards (" +
-                    "id SERIAL PRIMARY KEY, " +
+                    "id VARCHAR(255) PRIMARY KEY, " +
                     "name VARCHAR(50) NOT NULL, " +
                     "damage INT NOT NULL, " +
-                    "package_id VARCHAR(300) NOT NULL, " +
-                    "user_id INT REFERENCES users(id))";
+                    "package_id VARCHAR(300) NOT NULL " + ");";
             stmt.executeUpdate(createCardsTableSQL);
             System.out.println("Created cards table.");
-
-            String createDecksTableSQL = "CREATE TABLE decks (" +
-                    "id SERIAL PRIMARY KEY, " +
-                    "user_id INT REFERENCES users(id), " +
-                    "card_id INT REFERENCES cards(id))";
-            stmt.executeUpdate(createDecksTableSQL);
-            System.out.println("Created decks table.");
 
         } catch (SQLException e) {
             System.out.println("Error during database initialization: " + e.getMessage());

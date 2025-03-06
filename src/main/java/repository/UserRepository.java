@@ -26,7 +26,8 @@ public class UserRepository
                         rs.getString("username"),
                         rs.getString("password"),
                         rs.getString("token"),
-                        rs.getInt("coins")
+                        rs.getInt("coins"),
+                        rs.getInt("id")
                 );
             }
 
@@ -52,7 +53,8 @@ public class UserRepository
                         rs.getString("username"),
                         rs.getString("password"),
                         rs.getString("token"),
-                        rs.getInt("coins")
+                        rs.getInt("coins"),
+                        rs.getInt("id")
                 );
             }
         } catch (SQLException e)
@@ -62,14 +64,35 @@ public class UserRepository
         return null;
     }
 
-    public void updateUserCoins(User user)
+    public Integer findUserIdByUsername(String username) {
+        String query = "SELECT id FROM users WHERE username = ?";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+
+            stmt.setString(1, username);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getInt("id");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+
+    public void updateUserCoins(User user, int userCoins)
     {
+        int newCoins = userCoins - 5;
         String query = "UPDATE users SET coins = ? WHERE username = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
 
             System.out.println("Attempting to update coins for user: " + user.getUsername() + " to: " + user.getCoins());
-            stmt.setInt(1, user.getCoins());
+            stmt.setInt(1, newCoins);
             stmt.setString(2, user.getUsername());
             int rowsAffected = stmt.executeUpdate();
 

@@ -2,19 +2,21 @@ package model;
 
 import org.json.JSONObject;
 
+import java.util.UUID;
+
 public class Card
 {
     private String id;
     private String name;
     private double damage;
-    private String packageId;
+    private UUID packageId;
 
-    public Card(String id, String name, double damage, String packageId)
+    public Card(String id, String name, double damage)
     {
         this.id = id;
         this.name = name;
         this.damage = damage;
-        this.packageId = packageId;
+
     }
 
     public String getId()
@@ -47,9 +49,9 @@ public class Card
         this.damage = damage;
     }
 
-    public String getPackageId() { return packageId; }
+    public UUID getPackageId() { return packageId; }
 
-    public void setPackageId(String packageId) { this.packageId = packageId; }
+    public void setPackageId(UUID packageId) { this.packageId = packageId; }
 
 
     public JSONObject toJson()

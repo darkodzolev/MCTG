@@ -46,123 +46,117 @@ public class CardService
         }
 
         UUID packageIdUUID = UUID.randomUUID();
-        String packageId = packageIdUUID.toString();
+
 
         for (Card card : cardList) {
-            card.setPackageId(packageId);
+            card.setPackageId(packageIdUUID);
         }
 
-        Package newPackage = new Package(cardList, packageId);
+        Package newPackage = new Package(cardList, packageIdUUID);
 
 
         String queryInsertPackage = "INSERT INTO packages (id) VALUES (?)";
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(queryInsertPackage)) {
-            stmt.setObject(1, packageId);
+            stmt.setObject(1, packageIdUUID);
             stmt.executeUpdate();
         } catch (SQLException e) {
-            return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Bad Request: Invalid JSON\r\n");
+            return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Bad Request: Invalid SQL\r\n");
         }
 
-        String queryInsertCards = "INSERT INTO cards (id, name, damage, packageId) VALUES (?, ?, ?, ?)";
+        String queryInsertCards = "INSERT INTO cards (id, name, damage, package_id) VALUES (?, ?, ?, ?)";
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(queryInsertCards)) {
-            stmt.setObject(1, cardList.getFirst().getId());
-            stmt.setObject(2, cardList.getFirst().getName());
-            stmt.setObject(3, cardList.getFirst().getDamage());
-            stmt.setObject(4, cardList.getFirst().getPackageId());
-            stmt.executeUpdate();
+
+            for (Card card : cardList) {
+                stmt.setObject(1, card.getId());
+                stmt.setObject(2, card.getName());
+                stmt.setObject(3, card.getDamage());
+                stmt.setObject(4, card.getPackageId());
+                stmt.executeUpdate();
+            }
+
         } catch (SQLException e) {
-            return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Bad Request: Invalid JSON\r\n");
+            return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Bad Request: Invalid SQL\r\n");
         }
         return new Response(HttpStatus.CREATED, ContentType.PLAIN_TEXT, "Package(s) created successfully\r\n");
     }
 
-    public Response acquirePackages(String token)
-    {
+    public Response acquirePackages(String token) throws SQLException {
         System.out.println("AcquirePackages called with token: " + token);
         User user = userRepository.findUserByToken(token);
-        if (user == null)
-        {
+
+        if (user == null) {
             System.out.println("Token validation failed for token: " + token);
             return new Response(HttpStatus.UNAUTHORIZED, ContentType.PLAIN_TEXT, "Unauthorized: Invalid token\r\n");
         }
         System.out.println("User validated: " + user.getUsername());
 
-        if (user.getCoins() < 5)
-        {
-            System.out.println("Not enough coins for user: " + user.getUsername() + ", coins: " + user.getCoins());
-            return new Response(HttpStatus.FORBIDDEN, ContentType.PLAIN_TEXT, "Forbidden: Not enough coins\r\n");
-        }
+        int userCoins = 0;
 
-        List<Card> acquiredCards = new ArrayList<>();
-        // Step 3: Fetch a package from the database
-        try (Connection conn = Database.getConnection())
-        {
-            String fetchPackageQuery = "SELECT id, name, damage FROM packages LIMIT 1";
-            String deletePackageQuery = "DELETE FROM packages WHERE id::text = ?";
+        String getUserCoinsByUsername = "SELECT coins FROM users WHERE username = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(getUserCoinsByUsername)) {
+            stmt.setString(1, user.getUsername());
 
-            while (user.getCoins() >= 5)
-            {
-                try (PreparedStatement fetchStmt = conn.prepareStatement(fetchPackageQuery);
-                     PreparedStatement deleteStmt = conn.prepareStatement(deletePackageQuery)) {
-                    ResultSet rs = fetchStmt.executeQuery();
-
-                    if (!rs.next()) {
-                        System.out.println("No packages available.");
-                        break;
-                    }
-
-                    Card card = new Card(
-                            rs.getString("id"),
-                            rs.getString("name"),
-                            rs.getDouble("damage"),
-                            rs.getString("packageId")
-                    );
-                    acquiredCards.add(card);
-
-                    Stack userStack = userStacks.get(token);
-                    if (userStack == null)
-                    {
-                        userStack = new Stack();
-                        userStacks.put(token, userStack);
-                    }
-                    userStack.addCard(card);
-
-                    deleteStmt.setString(1, card.getId());
-                    deleteStmt.executeUpdate();
-                    System.out.println("Acquired card: " + card.getName());
-
-                    int coinsToDeduct = 5;
-                    System.out.println("AFTER: Current Coins for User: " + user.getCoins());
-                    System.out.println("Coins deducted for user: " + user.getUsername() + " remaining coins: " + user.getCoins());
-                    System.out.println("BEFORE: Current Coins for User: " + user.getCoins() + " Reduced Coins: " + coinsToDeduct);
-                    user.setCoins(user.getCoins() - coinsToDeduct);
-                    userRepository.updateUserCoins(user);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    userCoins = rs.getInt("coins");
                 }
             }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
 
-            if (acquiredCards.isEmpty()) {
-                System.out.println("No packages available.");
-                return new Response(HttpStatus.NOT_FOUND, ContentType.PLAIN_TEXT, "Not Found: No packages available\r\n");
+        if (userCoins < 5) {
+            System.out.println("Not enough coins for user: " + user.getUsername() + ", coins: " + user.getCoins());
+            return new Response(HttpStatus.FORBIDDEN, ContentType.PLAIN_TEXT, "Forbidden: Not enough coins\r\n");
+        } else {
+            List<UUID> availablePackageIds = new ArrayList<>();
+
+            try (Connection conn = Database.getConnection()) {
+                String getAvailablePackagesQuery = "SELECT id FROM packages WHERE user_id IS NULL";
+
+                try (PreparedStatement fetchStmt = conn.prepareStatement(getAvailablePackagesQuery);
+                     ResultSet rs = fetchStmt.executeQuery()) {
+
+                    while (rs.next()) {
+                        UUID packageId = UUID.fromString(rs.getString("id"));
+                        availablePackageIds.add(packageId);
+                    }
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
             }
 
-            JSONArray cardsJson = new JSONArray();
-            for (Card card : acquiredCards)
-            {
-                cardsJson.put(card.toJson());
+            if (!availablePackageIds.isEmpty()) {
+                int userId = userRepository.findUserIdByUsername(user.getUsername());
+                UUID packageId = availablePackageIds.getFirst();
+
+                String queryInsertPackage = "UPDATE packages SET user_id = (?) WHERE id = (?)";
+                try (Connection conn = Database.getConnection();
+                     PreparedStatement stmt = conn.prepareStatement(queryInsertPackage)) {
+                    stmt.setObject(1, userId);
+                    stmt.setObject(2, packageId);
+                    stmt.executeUpdate();
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+
+                userRepository.updateUserCoins(user, userCoins);
+
+            } else {
+                return new Response(HttpStatus.NOT_FOUND, ContentType.PLAIN_TEXT, "No card package available for buying");
             }
 
-            System.out.println("Cards acquired successfully: " + cardsJson.toString());
-            return new Response(HttpStatus.CREATED, ContentType.JSON, cardsJson.toString() + "\r\n");
-        } catch (Exception e)
-        {
-            e.printStackTrace();
-            return new Response(HttpStatus.INTERNAL_SERVER_ERROR, ContentType.PLAIN_TEXT, "Internal Server Error\r\n");
+
+            return new Response(HttpStatus.OK, ContentType.PLAIN_TEXT, "Package(s) acquired");
         }
     }
 
-    // Show user cards (Fix for #8)
+
+
+
     public Response getUserCards(Request request)
     {
         String token = request.getHeaderMap().getHeader("Authorization");
@@ -364,7 +358,7 @@ public class CardService
                 String name = cardObj.getString("Name");
                 double damage = cardObj.getDouble("Damage");
 
-                cards.add(new Card(id, name, damage, packageRepo.getId()));
+                cards.add(new Card(id, name, damage));
             }
         } catch (Exception e) {
             e.printStackTrace();

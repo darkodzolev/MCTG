@@ -4,6 +4,7 @@ import java.awt.*;
 
 public class User
 {
+    private int id;
     private String username;
     private String password;
     private String token;
@@ -18,12 +19,13 @@ public class User
         this.coins = coins;
     }
 
-    public User(String username, String password, String token, int coins)
+    public User(String username, String password, String token, int coins, int id)
     {
         this.username = username;
         this.password = password;
         this.token = null;
         this.coins = 20;
+        this.id = id;
     }
 
     public String getUsername()
@@ -54,5 +56,13 @@ public class User
     public void setCoins(int coins)
     {
         this.coins = coins;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
     }
 }
