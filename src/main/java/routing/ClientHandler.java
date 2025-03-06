@@ -1,5 +1,6 @@
 package routing;
 
+import model.Card;
 import server.Request;
 import server.Response;
 import server.Service;
@@ -7,9 +8,13 @@ import service.UserService;
 import service.AuthService;
 import service.CardService;
 
+import java.sql.SQLException;
+import java.util.List;
+
 public class ClientHandler implements Service
 {
     private final RouteHandler router;
+    public CardService cardService;
 
     public ClientHandler()
     {
@@ -25,7 +30,13 @@ public class ClientHandler implements Service
         router.addRoute("POST", "/sessions", request -> new UserService().loginUser(request.getBody()));
         router.addRoute("POST", "/packages", request -> {
             String token = request.getHeaderMap().getHeader("Authorization").replace("Bearer ", "");
-            return new CardService().createPackage(request.getBody(), token);
+            List<Card> cardList = cardService.getCardsFromPayload(request.getBody());
+            try {
+                return cardService.createPackage(cardList, token);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+
         });
         router.addRoute("POST", "/transactions/packages", request -> {
             String token = request.getHeaderMap().getHeader("Authorization").replace("Bearer ", "");

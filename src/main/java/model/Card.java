@@ -6,13 +6,15 @@ public class Card
 {
     private String id;
     private String name;
-    private float damage;
+    private double damage;
+    private String packageId;
 
-    public Card(String id, String name, float damage)
+    public Card(String id, String name, double damage, String packageId)
     {
         this.id = id;
         this.name = name;
         this.damage = damage;
+        this.packageId = packageId;
     }
 
     public String getId()
@@ -35,15 +37,20 @@ public class Card
         this.name = name;
     }
 
-    public float getDamage()
+    public double getDamage()
     {
         return damage;
     }
 
-    public void setDamage(int damage)
+    public void setDamage(double damage)
     {
         this.damage = damage;
     }
+
+    public String getPackageId() { return packageId; }
+
+    public void setPackageId(String packageId) { this.packageId = packageId; }
+
 
     public JSONObject toJson()
     {

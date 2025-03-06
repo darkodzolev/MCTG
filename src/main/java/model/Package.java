@@ -1,27 +1,38 @@
 package model;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class Package
 {
     private List<Card> cards;
+    private String id;
 
-    public Package()
+    public Package(List<Card> cards, String id)
     {
-        this.cards = new ArrayList<>();
+        this.cards = cards;
+        this.id = id;
     }
 
-    public void addCard(Card card)
-    {
-        if (cards.size() < 5)
-        {
-            cards.add(card);
-        }
-    }
-
-    public List<Card> getCards()
-    {
+    public List<Card> getCards() {
         return cards;
     }
+
+    public void setCards(List<Card> cards) {
+        this.cards = cards;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+
+
+
+
+
 }

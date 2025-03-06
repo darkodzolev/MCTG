@@ -1,4 +1,5 @@
 import server.Server;
+import utils.Database;
 import utils.Router;
 import routing.ClientHandler;
 
@@ -6,8 +7,10 @@ public class Main
 {
     public static void main(String[] args)
     {
-        Router router = configureRouter();  // Router konfigurieren
-        Server server = new Server(10001, router);  // Server auf Port 10001 starten
+        Router router = configureRouter();
+        Server server = new Server(10001, router);
+        Database.createDatabase();
+        Database.initializeDatabase();
 
         try
         {

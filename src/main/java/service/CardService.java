@@ -29,6 +29,8 @@ public class CardService
     private static final Map<String, Deck> userDecks = new HashMap<>();
     private static final List<Package> packages = new ArrayList<>();
     private final UserRepository userRepository = new UserRepository();
+    private Card card;
+    private Package packageRepo;
 
     // Static block to preload sample packages (Fix for #4)
     /*static
@@ -36,41 +38,44 @@ public class CardService
         refillPackages();
     }*/
 
-    public Response createPackage(String body, String token)
-    {
+    public Response createPackage(List<Card> cardList, String token) throws SQLException {
         // Validate admin token
         User adminUser = userRepository.findUserByToken(token);
         if (adminUser == null || !adminUser.getUsername().equals("admin")) {
             return new Response(HttpStatus.UNAUTHORIZED, ContentType.PLAIN_TEXT, "Unauthorized: Admin access required\r\n");
         }
 
-        // Parse and save package details
-        try
-        {
-            JSONArray packages = new JSONArray(body);
-            for (int i = 0; i < packages.length(); i++)
-            {
-                JSONObject pkg = packages.getJSONObject(i);
-                String id = pkg.getString("Id");
-                String name = pkg.getString("Name");
-                float damage = (float) pkg.getDouble("Damage");
+        UUID packageIdUUID = UUID.randomUUID();
+        String packageId = packageIdUUID.toString();
 
-                // Save to database
-                String query = "INSERT INTO packages (id, name, damage) VALUES (?, ?, ?)";
-                try (Connection conn = Database.getConnection();
-                     PreparedStatement stmt = conn.prepareStatement(query)) {
-                    stmt.setObject(1, UUID.fromString(id));
-                    stmt.setString(2, name);
-                    stmt.setFloat(3, damage);
-                    stmt.executeUpdate();
-                }
-            }
-            return new Response(HttpStatus.CREATED, ContentType.PLAIN_TEXT, "Package(s) created successfully\r\n");
-        } catch (Exception e)
-        {
-            e.printStackTrace();
+        for (Card card : cardList) {
+            card.setPackageId(packageId);
+        }
+
+        Package newPackage = new Package(cardList, packageId);
+
+
+        String queryInsertPackage = "INSERT INTO packages (id) VALUES (?)";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(queryInsertPackage)) {
+            stmt.setObject(1, packageId);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
             return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Bad Request: Invalid JSON\r\n");
         }
+
+        String queryInsertCards = "INSERT INTO cards (id, name, damage, packageId) VALUES (?, ?, ?, ?)";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(queryInsertCards)) {
+            stmt.setObject(1, cardList.getFirst().getId());
+            stmt.setObject(2, cardList.getFirst().getName());
+            stmt.setObject(3, cardList.getFirst().getDamage());
+            stmt.setObject(4, cardList.getFirst().getPackageId());
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Bad Request: Invalid JSON\r\n");
+        }
+        return new Response(HttpStatus.CREATED, ContentType.PLAIN_TEXT, "Package(s) created successfully\r\n");
     }
 
     public Response acquirePackages(String token)
@@ -100,7 +105,7 @@ public class CardService
             while (user.getCoins() >= 5)
             {
                 try (PreparedStatement fetchStmt = conn.prepareStatement(fetchPackageQuery);
-                    PreparedStatement deleteStmt = conn.prepareStatement(deletePackageQuery)) {
+                     PreparedStatement deleteStmt = conn.prepareStatement(deletePackageQuery)) {
                     ResultSet rs = fetchStmt.executeQuery();
 
                     if (!rs.next()) {
@@ -111,18 +116,29 @@ public class CardService
                     Card card = new Card(
                             rs.getString("id"),
                             rs.getString("name"),
-                            rs.getFloat("damage")
+                            rs.getDouble("damage"),
+                            rs.getString("packageId")
                     );
                     acquiredCards.add(card);
+
+                    Stack userStack = userStacks.get(token);
+                    if (userStack == null)
+                    {
+                        userStack = new Stack();
+                        userStacks.put(token, userStack);
+                    }
+                    userStack.addCard(card);
 
                     deleteStmt.setString(1, card.getId());
                     deleteStmt.executeUpdate();
                     System.out.println("Acquired card: " + card.getName());
 
                     int coinsToDeduct = 5;
+                    System.out.println("AFTER: Current Coins for User: " + user.getCoins());
+                    System.out.println("Coins deducted for user: " + user.getUsername() + " remaining coins: " + user.getCoins());
+                    System.out.println("BEFORE: Current Coins for User: " + user.getCoins() + " Reduced Coins: " + coinsToDeduct);
                     user.setCoins(user.getCoins() - coinsToDeduct);
                     userRepository.updateUserCoins(user);
-                    System.out.println("Coins deducted for user: " + user.getUsername() + ", remaining coins: " + user.getCoins());
                 }
             }
 
@@ -247,7 +263,6 @@ public class CardService
             System.out.println("Extracted Token: " + token);
         }
 
-        // Step 5: Validate token and user
         if (token == null || !isValidToken(token))
         {
             System.out.println("Token is invalid or missing");
@@ -335,32 +350,26 @@ public class CardService
         userStacks.put(token, stack);
     }
 
-    /*public static synchronized void refillPackages()
+    public List<Card> getCardsFromPayload(String payload)
     {
-        if (!packages.isEmpty()) return; // Prevent multiple refills
+        List<Card> cards = new ArrayList<>();
 
-        System.out.println("Refilling packages...");
-        packages.clear(); // Clear any leftover state
+        try {
+            JSONArray jsonArray = new JSONArray(payload);
 
-        // Load exactly 2 packages
-        for (int i = 0; i < 2; i++) {
-            Package cardPackage = new Package();
-            cardPackage.addCard(new Card("card-id-" + i + "-1", "Monster" + i, 10 + i));
-            cardPackage.addCard(new Card("card-id-" + i + "-2", "Goblin" + i, 15 + i));
-            cardPackage.addCard(new Card("card-id-" + i + "-3", "Spell" + i, 20 + i));
-            cardPackage.addCard(new Card("card-id-" + i + "-4", "Dragon" + i, 25 + i));
-            cardPackage.addCard(new Card("card-id-" + i + "-5", "Wizard" + i, 30 + i));
-            packages.add(cardPackage);
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONObject cardObj = jsonArray.getJSONObject(i);
+
+                String id = cardObj.getString("Id");
+                String name = cardObj.getString("Name");
+                double damage = cardObj.getDouble("Damage");
+
+                cards.add(new Card(id, name, damage, packageRepo.getId()));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        System.out.println("Packages refilled. Total packages: " + packages.size());
+
+        return cards;
     }
-
-    public Response refillPackagesEndpoint(Request request)
-    {
-        synchronized (packages)
-        {
-            refillPackages();
-            return new Response(HttpStatus.OK, ContentType.PLAIN_TEXT, "Packages refilled\r\n");
-        }
-    }*/
 }

@@ -38,7 +38,7 @@ public class UserService
             }
 
             // Register the user in the database
-            User user = new User(username, password);
+            User user = new User(username, password,20);
             userRepository.registerUser(user);
 
             return new Response(HttpStatus.CREATED, ContentType.PLAIN_TEXT, "User registered successfully\r\n");

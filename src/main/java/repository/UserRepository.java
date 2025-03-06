@@ -82,11 +82,12 @@ public class UserRepository
 
     public void registerUser(User user) throws SQLException
     {
-        String query = "INSERT INTO users (username, password) VALUES (?, ?)";
+        String query = "INSERT INTO users (username, password, coins) VALUES (?, ?, ?)";
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.setString(1, user.getUsername());
             stmt.setString(2, user.getPassword());
+            stmt.setInt(3, user.getCoins());
             stmt.executeUpdate();
         }
     }
