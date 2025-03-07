@@ -71,5 +71,16 @@ public class Database
             System.out.println("Error during database initialization: " + e.getMessage());
         }
     }
-}
 
+    private static boolean isFirstLogin = true;
+
+    public static boolean isFirstLogin()
+    {
+        return isFirstLogin;
+    }
+
+    public static void setFirstLoginFlag(boolean firstLogin)
+    {
+        isFirstLogin = firstLogin;
+    }
+}

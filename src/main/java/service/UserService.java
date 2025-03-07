@@ -13,6 +13,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.UUID;
 
 public class UserService
 {
@@ -86,7 +87,56 @@ public class UserService
                 stmt.executeUpdate();
             }
 
-            // You can also save/update the token in the database if needed
+            if (Database.isFirstLogin()) {
+                // Card details
+                String cardId = "cardId_001";
+                String cardName = "Extra Card";
+                int cardDamage = 10; // Card damage or other attributes
+                UUID packageId = UUID.randomUUID(); // Generate a random UUID for the package ID
+
+                // Insert the special card into the cards table
+                String insertCardQuery = "INSERT INTO cards (id, name, damage, package_id) VALUES (?, ?, ?, ?)";
+                try (Connection conn = Database.getConnection();
+                     PreparedStatement stmt = conn.prepareStatement(insertCardQuery)) {
+                    stmt.setString(1, cardId);
+                    stmt.setString(2, cardName);
+                    stmt.setInt(3, cardDamage);
+                    stmt.setObject(4, packageId);  // Assign the special card to this package using UUID
+                    stmt.executeUpdate();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+
+                // Get the first user (you can query the user from the database based on a condition, e.g., the first user)
+                String firstUserQuery = "SELECT id FROM users ORDER BY id LIMIT 1"; // Adjust if necessary to get the first user
+                int firstUserId = -1;
+                try (Connection conn = Database.getConnection();
+                     PreparedStatement stmt = conn.prepareStatement(firstUserQuery);
+                     ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        firstUserId = rs.getInt("id");
+                    }
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+
+                // If the first user is found, add the package to the packages table
+                if (firstUserId != -1) {
+                    String insertPackageQuery = "INSERT INTO packages (id, user_id) VALUES (?, ?)";
+                    try (Connection conn = Database.getConnection();
+                         PreparedStatement stmt = conn.prepareStatement(insertPackageQuery)) {
+                        stmt.setObject(1, packageId);  // Use the UUID for the package
+                        stmt.setInt(2, firstUserId);   // Assign the package to the first user
+                        stmt.executeUpdate();
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                // Update the first login flag to false
+                Database.setFirstLoginFlag(false);
+            }
+
             CardService.addUserStack(token, new Stack());
 
             System.out.println("Login Successful. Token Generated: " + token);

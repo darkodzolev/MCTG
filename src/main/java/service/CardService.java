@@ -22,6 +22,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import org.json.JSONException;
+
 
 public class CardService
 {
@@ -31,12 +33,6 @@ public class CardService
     private final UserRepository userRepository = new UserRepository();
     private Card card;
     private Package packageRepo;
-
-    // Static block to preload sample packages (Fix for #4)
-    /*static
-    {
-        refillPackages();
-    }*/
 
     public Response createPackage(List<Card> cardList, String token) throws SQLException {
         // Validate admin token
@@ -146,57 +142,68 @@ public class CardService
                 userRepository.updateUserCoins(user, userCoins);
 
             } else {
-                return new Response(HttpStatus.NOT_FOUND, ContentType.PLAIN_TEXT, "No card package available for buying");
+                return new Response(HttpStatus.NOT_FOUND, ContentType.PLAIN_TEXT, "No card package available for buying\r\n");
             }
 
 
-            return new Response(HttpStatus.OK, ContentType.PLAIN_TEXT, "Package(s) acquired");
+            return new Response(HttpStatus.OK, ContentType.PLAIN_TEXT, "Package(s) acquired\r\n");
         }
     }
 
-
-
-
-    public Response getUserCards(Request request)
-    {
+    public Response getUserCards(Request request) {
         String token = request.getHeaderMap().getHeader("Authorization");
-        System.out.println("Raw Authorization Header: " + token);
 
-        if (token != null && token.startsWith("Bearer "))
-        {
-            token = token.substring(7); // Strip "Bearer " prefix
-            System.out.println("Extracted Token: " + token);
+        if (token != null && token.startsWith("Bearer ")) {
+            token = token.substring(7);
         }
 
-        if (token == null || !isValidToken(token))
-        {
-            System.out.println("Token is invalid or missing");
+        if (token == null || !isValidToken(token)) {
             return new Response(HttpStatus.UNAUTHORIZED, ContentType.PLAIN_TEXT, "Unauthorized\r\n");
         }
 
-        // Get the user's stack of cards
-        Stack userStack = userStacks.get(token);
-        if (userStack == null)
-        {
-            System.out.println("No stack found for token: " + token);
+        User user = userRepository.findUserByToken(token);
+        if (user == null) {
             return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "User not found\r\n");
         }
 
-        // Check if the stack is empty
-        if (userStack.getCards().isEmpty())
-        {
-            System.out.println("Stack is empty for user with token: " + token);
-            return new Response(HttpStatus.OK, ContentType.JSON, "[]");
+        // Ensure the user ID is not null
+        Integer userId = userRepository.findUserIdByUsername(user.getUsername());
+        if (userId == null) {
+            return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "User ID not found\r\n");
         }
 
-        // Convert cards to JSON using Gson
-        String responseBody = new Gson().toJson(userStack.getCards());
-        System.out.println("Returning user cards for token: " + token);
+        List<Card> userCards = new ArrayList<>();
+        String query = "SELECT id, name, damage FROM cards WHERE package_id::text IN (SELECT id::text FROM packages WHERE user_id = ?)";
 
-        return new Response(HttpStatus.OK, ContentType.JSON, responseBody);
+        try (Connection conn = Database.getConnection()) {
+            if (conn == null) {
+                return new Response(HttpStatus.INTERNAL_SERVER_ERROR, ContentType.PLAIN_TEXT, "Database connection failed\r\n");
+            }
+
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setInt(1, userId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        String id = rs.getString("id");
+                        String name = rs.getString("name");
+                        double damage = rs.getDouble("damage");
+                        userCards.add(new Card(id, name, damage));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Database error: " + e.getMessage() + "\r\n");
+        }
+
+        if (userCards.isEmpty()) {
+            return new Response(HttpStatus.OK, ContentType.JSON, "[]\r\n");
+        }
+
+        return new Response(HttpStatus.OK, ContentType.JSON, new Gson().toJson(userCards) + "\r\n");
     }
 
-    // Show unconfigured deck (Fix for #10)
     public Response getDeck(Request request)
     {
         String token = request.getHeaderMap().getHeader("Authorization");
@@ -245,65 +252,46 @@ public class CardService
         return new Response(HttpStatus.OK, ContentType.JSON, json.toString());
     }
 
-    // Configure deck (Fix for #11)
-    public Response configureDeck(Request request)
-    {
+    public Response configureDeck(Request request) {
         String token = request.getHeaderMap().getHeader("Authorization");
-        System.out.println("Raw Authorization Header: " + token);
-
-        if (token != null && token.startsWith("Bearer "))
-        {
-            token = token.substring(7); // Strip "Bearer " prefix
-            System.out.println("Extracted Token: " + token);
+        if (token == null || !token.startsWith("Bearer ")) {
+            return new Response(HttpStatus.UNAUTHORIZED, ContentType.PLAIN_TEXT, "Unauthorized\r\n");
         }
 
-        if (token == null || !isValidToken(token))
-        {
-            System.out.println("Token is invalid or missing");
+        token = token.substring(7);  // Strip "Bearer " prefix
+
+        if (!isValidToken(token)) {
             return new Response(HttpStatus.UNAUTHORIZED, ContentType.PLAIN_TEXT, "Unauthorized\r\n");
         }
 
         Stack userStack = userStacks.get(token);
-        if (userStack == null)
-        {
-            System.out.println("User stack not found for token: " + token);
+        if (userStack == null) {
             return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "User not found\r\n");
         }
 
-        try
-        {
-            // Parse request body for card IDs
+        try {
             JSONArray cardIds = new JSONArray(request.getBody());
-            System.out.println("Received card IDs: " + cardIds);
 
-            // Ensure the deck contains exactly 4 cards
-            if (cardIds.length() != 4)
-            {
-                System.out.println("Invalid deck size: " + cardIds.length());
+            if (cardIds.length() != 4) {
                 return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Deck must contain exactly 4 cards\r\n");
             }
 
-            // Validate and build the deck
             Deck userDeck = new Deck();
-            for (int i = 0; i < cardIds.length(); i++)
-            {
+            for (int i = 0; i < cardIds.length(); i++) {
                 String cardId = cardIds.getString(i);
-                Card card = userStack.getCardById(cardId); // Check if the card exists in the user's stack
-                if (card == null)
-                {
-                    System.out.println("Card not found in user's stack: " + cardId);
+                Card card = userStack.getCardById(cardId);
+                if (card == null) {
                     return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Card not found: " + cardId + "\r\n");
                 }
                 userDeck.addCard(card);
             }
 
-            // Save the configured deck
             userDecks.put(token, userDeck);
-            System.out.println("Deck successfully configured for token: " + token);
             return new Response(HttpStatus.OK, ContentType.PLAIN_TEXT, "Deck configured\r\n");
-        } catch (Exception e)
-        {
-            System.out.println("Exception during deck configuration: " + e.getMessage());
+
+        } catch (JSONException e) {
+            return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Invalid request body - JSON parsing error\r\n");
+        } catch (Exception e) {
             return new Response(HttpStatus.BAD_REQUEST, ContentType.PLAIN_TEXT, "Invalid request body\r\n");
         }
     }
